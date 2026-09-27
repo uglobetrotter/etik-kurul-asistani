@@ -1,0 +1,8 @@
+# Metin dosyaları her platformda LF kalır; Windows betikleri CRLF.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.skill binary
+*.zip binary
+*.pdf binary
+*.docx binary

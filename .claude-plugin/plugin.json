@@ -1,0 +1,8 @@
+{
+  "name": "etik-kurul-asistani",
+  "version": "1.0.0",
+  "description": "Ethics committee dossier builder for the Göztepe Prof. Dr. Süleyman Yalçın City Hospital non-interventional clinical research ethics committee (EY.FR.74-78).",
+  "author": {
+    "name": "Uğur Durmuş"
+  }
+}

@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag to create and publish from main (e.g. v1.0.0). Leave empty to run tests only.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: SKILL.md frontmatter
+        shell: bash
+        run: |
+          f=skills/etik-kurul-asistani/SKILL.md
+          head -1 "$f" | grep -qx -- '---'
+          grep -q '^name: etik-kurul-asistani$' "$f"
+          grep -q '^description:' "$f"
+          if grep -q $'\r' "$f"; then echo "::error::CRLF in SKILL.md"; exit 1; fi
+
+      - name: Skill checks
+        shell: bash
+        run: |
+          set -e
+          python -m pip install --quiet -r requirements.txt
+          T=skills/etik-kurul-asistani/assets/EY-FR-75_basvuru_formu_bos.docx
+          python skills/etik-kurul-asistani/scripts/inspect_form.py "$T" > /dev/null
+          python skills/etik-kurul-asistani/scripts/scrub_check.py "$T"
+          set +e
+          python skills/etik-kurul-asistani/scripts/consistency_check.py "$T" > cc.txt
+          rc=$?
+          set -e
+          tail -1 cc.txt
+          if [ "$rc" != 1 ]; then echo "::error::consistency_check should flag the blank form (rc=$rc)"; exit 1; fi
+
+      - name: Install into a clean home (macOS/Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          export HOME="$RUNNER_TEMP/home"
+          mkdir -p "$HOME"
+          ./scripts/install.sh
+          test -L "$HOME/.claude/skills/etik-kurul-asistani"
+          test -f "$HOME/.claude/skills/etik-kurul-asistani/SKILL.md"
+          ./scripts/install.sh --uninstall
+          test ! -e "$HOME/.claude/skills/etik-kurul-asistani"
+          test -f skills/etik-kurul-asistani/SKILL.md
+
+      - name: Install into a clean home (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:USERPROFILE = Join-Path $env:RUNNER_TEMP 'home'
+          New-Item -ItemType Directory -Force $env:USERPROFILE | Out-Null
+          .\scripts\install.ps1
+          $link = Join-Path $env:USERPROFILE '.claude\skills\etik-kurul-asistani'
+          if (-not ((Get-Item $link -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'junction not created' }
+          if (-not (Test-Path (Join-Path $link 'SKILL.md'))) { throw 'SKILL.md not reachable through the junction' }
+          .\scripts\install.ps1 -Uninstall
+          if (Test-Path $link) { throw 'uninstall left the junction' }
+          if (-not (Test-Path 'skills\etik-kurul-asistani\SKILL.md')) { throw 'uninstall touched the repo' }
+
+      - name: Build .skill packages with the Windows builder and check zip paths
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          .\scripts\build-skill.ps1
+          python -c "import glob,zipfile,sys; want=len(glob.glob('skills/*/SKILL.md')); fs=glob.glob('dist/*.skill'); bad=[n for f in fs for n in zipfile.ZipFile(f).namelist() if chr(92) in n]; print(len(fs), 'of', want, 'packages', len(bad), 'bad paths'); sys.exit(1 if bad or len(fs) != want else 0)"
+
+  release:
+    # A pushed v* tag, or a manual run on main that names the tag to create.
+    if: >-
+      startsWith(github.ref, 'refs/tags/') ||
+      (github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && github.ref == 'refs/heads/main')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag must match plugin.json version
+        run: |
+          version="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' .claude-plugin/plugin.json)"
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::tag $TAG does not match plugin.json version $version"
+            exit 1
+          fi
+      - name: Refuse to move an existing tag
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+            echo "::error::tag $TAG already exists; push a new version instead"
+            exit 1
+          fi
+      - name: Build
+        run: ./scripts/build-skill.sh
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          files: dist/*.skill
