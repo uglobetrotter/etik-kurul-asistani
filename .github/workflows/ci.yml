@@ -55,6 +55,24 @@ jobs:
           tail -1 cc.txt
           if [ "$rc" != 1 ]; then echo "::error::consistency_check should flag the blank form (rc=$rc)"; exit 1; fi
 
+      - name: to_pdf.py fails cleanly where Word is absent
+        shell: bash
+        timeout-minutes: 2
+        run: |
+          T=skills/etik-kurul-asistani/assets/EY-FR-75_basvuru_formu_bos.docx
+          set +e
+          python skills/etik-kurul-asistani/scripts/to_pdf.py "$T" "$RUNNER_TEMP/out.pdf" > msg.txt 2>&1
+          rc=$?
+          set -e
+          cat msg.txt
+          case "$RUNNER_OS" in
+            macOS)   want="Microsoft Word bulunamadi" ;;
+            Windows) want="pywin32 yok" ;;
+            *)       want="Word yok" ;;
+          esac
+          if [ "$rc" = 0 ]; then echo "::error::expected a failure without Word"; exit 1; fi
+          grep -q "$want" msg.txt || { echo "::error::expected message: $want"; exit 1; }
+
       - name: Install into a clean home (macOS/Linux)
         if: runner.os != 'Windows'
         shell: bash

@@ -16,9 +16,11 @@ Göztepe Prof. Dr. Süleyman Yalçın Şehir Hastanesi Girişimsel Olmayan Klini
 
 Betikler `python-docx` ister: `pip install -r requirements.txt`.
 
-> **Platform notu:** `to_pdf.py` yalnız **Windows'ta, Word kuruluyken** çalışır
-> (`pywin32`). macOS'ta "pywin32 yok" deyip durur; görsel kontrolü PDF'i Word'de elle
-> üreterek yapın. Diğer betikler iki platformda da çalışır.
+> **Platform notu:** `to_pdf.py` Word ister. Windows'ta Word'ü COM üzerinden
+> (`pip install pywin32`), macOS'ta Microsoft Word for Mac'i AppleScript (`osascript`)
+> üzerinden çağırır. macOS'ta ilk çalıştırmada iki izin istenebilir: Terminal'in Word'ü
+> denetlemesi (Sistem Ayarları → Gizlilik ve Güvenlik → Otomasyon) ve Word'ün dosyaya
+> erişimi. Word yoksa betik açık bir mesajla durur; PDF'i Word'de elle üretin.
 
 ## Kurulum
 

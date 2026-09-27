@@ -60,7 +60,8 @@ numaraları, H.4 tarih ve H.5 imza da kullanıcıya bırakılır.
 
 ## Doğrulama
 
-Bu formda XML denetimi yetmez. `win32com` ile Word'de açıp PDF'e çevirip sayfaları
+Bu formda XML denetimi yetmez. `scripts/to_pdf.py` ile Word'de açıp (Windows'ta `win32com`,
+macOS'ta AppleScript) PDF'e çevirip sayfaları
 gözle görmek, XML'in yakalayamadığı yerleşim bozukluklarını anında göstermiştir ve bu
 formda yaşanan her yerleşim hatası yalnız burada yakalanmıştır. Zorunlu adımdır.
 
